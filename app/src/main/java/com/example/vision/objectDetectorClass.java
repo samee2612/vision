@@ -7,6 +7,9 @@ import android.graphics.Bitmap;
 import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.gpu.GpuDelegate;
 
@@ -15,6 +18,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -82,9 +86,7 @@ public class objectDetectorClass {
     public Mat recognizeImage(Mat mat_image) {
         // Rotate original image by 90 degree get get portrait frame
         Mat rotated_mat_image = new Mat();
-        Mat a=mat_image.t();
-        Core.flip(a,mat_image,1);
-        a.release();
+        Core.flip(mat_image.t(),rotated_mat_image,1);
         // if you do not do this process you will get improper prediction, less no. of object
         // now convert it to bitmap
         Bitmap bitmap=null;
@@ -128,10 +130,37 @@ public class objectDetectorClass {
         interpreter.runForMultipleInputsOutputs(input,output_map);
 
 
+        Object value=output_map.get(0);
+        Object Object_class=output_map.get(1);
+        Object score=output_map.get(2);
+
+        // loop through each object
+        // as output has only 10 boxes
+        for (int i=0;i<10;i++){
+            float class_value=(float) Array.get(Array.get(Object_class,0),i);
+            float score_value=(float) Array.get(Array.get(score,0),i);
+            // define threshold for score
+            if(score_value>0.5){
+                Object box1=Array.get(Array.get(value,0),i);
+                // we are multiplying it with Original height and width of frame
+
+                float top=(float) Array.get(box1,0)*height;
+                float left=(float) Array.get(box1,1)*width;
+                float bottom=(float) Array.get(box1,2)*height;
+                float right=(float) Array.get(box1,3)*width;
+                // draw rectangle in Original frame //  starting point    // ending point of box  // color of box       thickness
+                Imgproc.rectangle(rotated_mat_image,new Point(left,top),new Point(right,bottom),new Scalar(0, 255, 0, 255),2);
+                // write text on frame
+                // string of class name of object  // starting point                         // color of text           // size of text
+                Imgproc.putText(rotated_mat_image,labelList.get((int) class_value),new Point(left,top),3,1,new Scalar(255, 0, 0, 255),2);
+            }
+
+        }
+
+
         // before returning rotate back by -90 degree
-        Mat b=mat_image.t();
-        Core.flip(b,mat_image,0);
-        b.release();
+        Core.flip(rotated_mat_image.t(),mat_image,0);
+        Core.flip(mat_image.t(),mat_image,1);
 
         return mat_image;
 
